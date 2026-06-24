@@ -1,0 +1,44 @@
+# WorldOS Browser — Flutter / Dart .gitignore
+
+# Dart / Flutter
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+pubspec.lock
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Generated
+**/*.g.dart
+**/*.freezed.dart
+**/*.mocks.dart
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local model cache (the GGUF is downloaded at runtime, never committed)
+*.gguf
+models/*.gguf
+
+# Android
+android/.gradle/
+android/local.properties
+android/key.properties
+**/android/**/gradle-wrapper.jar
+*.keystore
+*.jks
+
+# iOS / macOS
+**/ios/Flutter/.last_build_id
+**/Pods/
+**/.symlinks/

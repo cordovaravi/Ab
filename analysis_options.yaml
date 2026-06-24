@@ -1,0 +1,13 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    todo: ignore
+    # The provided UI uses many withOpacity() calls; keep these as info, not errors.
+    deprecated_member_use: info
+  exclude:
+    - "**/*.g.dart"
+
+linter:
+  rules:
+    avoid_print: false
