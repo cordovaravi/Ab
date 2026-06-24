@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
+
 import 'core/theme.dart';
 import 'providers/app_state.dart';
 import 'screens/home_screen.dart';
@@ -28,7 +29,7 @@ class WorldOSApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppBrain()),
       ],
       child: MaterialApp(
-        title: 'WorldOS Browser',
+        title: 'WorldOS Browser V1',
         debugShowCheckedModeBanner: false,
         theme: WorldOSTheme.darkTheme,
         home: const SplashScreen(),
@@ -94,7 +95,6 @@ class _SplashScreenState extends State<SplashScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Animated logo
             Container(
               width: 100,
               height: 100,
@@ -119,10 +119,11 @@ class _SplashScreenState extends State<SplashScreen>
                 size: 50,
                 color: WorldOSTheme.bg,
               ),
-            ).animate(onPlay: (c) => c.repeat()).shimmer(
-                  duration: 2000.ms,
-                  color: WorldOSTheme.cyan.withOpacity(0.3),
-                ),
+            )
+                .animate(onPlay: (c) => c.repeat())
+                .shimmer(
+                    duration: 2000.ms,
+                    color: WorldOSTheme.cyan.withOpacity(0.3)),
             const SizedBox(height: 32),
             Text(
               'WORLDOS',
@@ -135,12 +136,12 @@ class _SplashScreenState extends State<SplashScreen>
             ),
             const SizedBox(height: 4),
             Text(
-              'ACTION BROWSER',
+              'ACTION BROWSER V1',
               style: GoogleFonts.spaceGrotesk(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w400,
                 color: WorldOSTheme.cyan,
-                letterSpacing: 6,
+                letterSpacing: 4,
               ),
             ),
             const SizedBox(height: 48),
@@ -161,12 +162,12 @@ class _SplashScreenState extends State<SplashScreen>
                   const SizedBox(height: 12),
                   Text(
                     _progress < 0.3
-                        ? 'Loading brain...'
+                        ? 'Loading services...'
                         : _progress < 0.6
                             ? 'Calibrating agents...'
                             : _progress < 0.9
-                                ? 'Syncing memory...'
-                                : 'Ready',
+                                ? 'Ready'
+                                : 'Go',
                     style: GoogleFonts.dmSans(
                       fontSize: 11,
                       color: WorldOSTheme.textMuted,

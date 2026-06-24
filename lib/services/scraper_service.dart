@@ -1,89 +1,99 @@
-import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 
-/// Background "google scraper" with a brain — scrapes and preprocesses
-/// results for the agent orchestrator. Tries Google, falls back to
-/// DuckDuckGo, then to high-quality simulated results so the pipeline
-/// always produces something to reason over.
+/// Web scraper with multiple search backends.
+/// Primary: DuckDuckGo HTML (no API key needed).
+/// Fallback: Simulated results when network fails.
+///
+/// For production, replace with Serper / Brave Search / Tavily APIs.
 class ScraperService {
-  static const _userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  ];
+  static const _userAgent =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   final http.Client _client = http.Client();
 
-  /// Search Google and parse results.
-  Future<List<ScrapedSource>> searchGoogle(String query,
-      {int numResults = 10}) async {
+  /// Search using DuckDuckGo HTML (more reliable than Google scraping).
+  Future<List<ScrapedSource>> search(String query, {int numResults = 10}) async {
     try {
-      final encoded = Uri.encodeComponent(query);
-      final url = Uri.parse(
-        'https://www.google.com/search?q=$encoded&num=$numResults&hl=en',
-      );
-
-      final response = await _client.get(url, headers: {
-        'User-Agent':
-            _userAgents[DateTime.now().millisecond % _userAgents.length],
-        'Accept': 'text/html,application/xhtml+xml',
-        'Accept-Language': 'en-US,en;q=0.9',
-      });
-
-      if (response.statusCode == 200) {
-        final parsed = _parseGoogleResults(response.body);
-        if (parsed.isNotEmpty) return parsed;
-      }
-
-      debugPrint('[Scraper] Google returned ${response.statusCode}, trying DuckDuckGo');
-      return _searchDuckDuckGo(query, numResults: numResults);
+      final results = await _searchDuckDuckGo(query, numResults: numResults);
+      if (results.isNotEmpty) return results;
     } catch (e) {
-      debugPrint('[Scraper] Google error: $e');
-      return _searchDuckDuckGo(query, numResults: numResults);
+      debugPrint('[Scraper] DuckDuckGo failed: $e');
     }
+
+    try {
+      final results = await _searchGoogle(query, numResults: numResults);
+      if (results.isNotEmpty) return results;
+    } catch (e) {
+      debugPrint('[Scraper] Google also failed: $e');
+    }
+
+    return _generateSimulatedResults(query);
   }
 
-  /// Fallback: DuckDuckGo HTML search.
   Future<List<ScrapedSource>> _searchDuckDuckGo(String query,
       {int numResults = 10}) async {
-    try {
-      final encoded = Uri.encodeComponent(query);
-      final url = Uri.parse('https://html.duckduckgo.com/html/?q=$encoded');
+    final encoded = Uri.encodeComponent(query);
+    final url = Uri.parse('https://html.duckduckgo.com/html/?q=$encoded');
 
-      final response = await _client.get(url, headers: {
-        'User-Agent': _userAgents[0],
-      });
+    final response = await _client.get(url, headers: {
+      'User-Agent': _userAgent,
+      'Accept': 'text/html',
+    }).timeout(const Duration(seconds: 12));
 
-      if (response.statusCode == 200) {
-        final parsed = _parseDuckDuckGoResults(response.body);
-        if (parsed.isNotEmpty) return parsed;
-      }
+    if (response.statusCode != 200) return [];
 
-      debugPrint('[Scraper] DuckDuckGo also failed, returning simulated');
-      return _generateSimulatedResults(query);
-    } catch (e) {
-      debugPrint('[Scraper] DuckDuckGo error: $e');
-      return _generateSimulatedResults(query);
-    }
-  }
-
-  /// Parse Google search results HTML.
-  List<ScrapedSource> _parseGoogleResults(String html) {
-    final document = html_parser.parse(html);
+    final document = html_parser.parse(response.body);
     final results = <ScrapedSource>[];
 
-    final searchResults = document.querySelectorAll('div.g');
+    for (final result in document.querySelectorAll('.result').take(numResults)) {
+      try {
+        final titleEl = result.querySelector('.result__a');
+        final snippetEl = result.querySelector('.result__snippet');
+        final title = titleEl?.text.trim() ?? '';
+        final href = titleEl?.attributes['href'] ?? '';
+        final snippet = snippetEl?.text.trim() ?? '';
 
-    for (final result in searchResults.take(10)) {
+        if (title.isNotEmpty) {
+          results.add(ScrapedSource(
+            title: title,
+            url: _extractDuckUrl(href),
+            snippet: snippet,
+            source: 'duckduckgo',
+          ));
+        }
+      } catch (_) {}
+    }
+
+    debugPrint('[Scraper] DuckDuckGo: ${results.length} results');
+    return results;
+  }
+
+  Future<List<ScrapedSource>> _searchGoogle(String query,
+      {int numResults = 10}) async {
+    final encoded = Uri.encodeComponent(query);
+    final url = Uri.parse(
+      'https://www.google.com/search?q=$encoded&num=$numResults&hl=en',
+    );
+
+    final response = await _client.get(url, headers: {
+      'User-Agent': _userAgent,
+      'Accept': 'text/html',
+      'Accept-Language': 'en-US,en;q=0.9',
+    }).timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) return [];
+
+    final document = html_parser.parse(response.body);
+    final results = <ScrapedSource>[];
+
+    for (final result in document.querySelectorAll('div.g').take(numResults)) {
       try {
         final titleEl = result.querySelector('h3');
         final linkEl = result.querySelector('a');
-        final snippetEl = result.querySelector('div[data-sncf]') ??
-            result.querySelector('.VwiC3b') ??
-            result.querySelector('span.aCOpRe');
+        final snippetEl = result.querySelector('.VwiC3b');
 
         final title = titleEl?.text.trim() ?? '';
         final href = linkEl?.attributes['href'] ?? '';
@@ -97,72 +107,16 @@ class ScraperService {
             source: 'google',
           ));
         }
-      } catch (e) {
-        continue;
-      }
+      } catch (_) {}
     }
 
-    if (results.isEmpty) {
-      final allLinks = document.querySelectorAll('a[href]');
-      for (final link in allLinks) {
-        final href = link.attributes['href'] ?? '';
-        final title = link.querySelector('h3')?.text ?? '';
-        if (title.isNotEmpty && href.contains('http')) {
-          final parent = link.parent;
-          final snippet = parent?.querySelector('div')?.text ?? '';
-          results.add(ScrapedSource(
-            title: title,
-            url: href,
-            snippet: snippet.length > 200 ? snippet.substring(0, 200) : snippet,
-            source: 'google',
-          ));
-        }
-        if (results.length >= 10) break;
-      }
-    }
-
-    debugPrint('[Scraper] Parsed ${results.length} Google results');
-    return results;
-  }
-
-  /// Parse DuckDuckGo HTML results.
-  List<ScrapedSource> _parseDuckDuckGoResults(String html) {
-    final document = html_parser.parse(html);
-    final results = <ScrapedSource>[];
-
-    final resultDivs = document.querySelectorAll('.result');
-
-    for (final result in resultDivs.take(10)) {
-      try {
-        final titleEl = result.querySelector('.result__a');
-        final snippetEl = result.querySelector('.result__snippet');
-
-        final title = titleEl?.text.trim() ?? '';
-        final href = titleEl?.attributes['href'] ?? '';
-        final snippet = snippetEl?.text.trim() ?? '';
-
-        if (title.isNotEmpty) {
-          results.add(ScrapedSource(
-            title: title,
-            url: _extractDuckUrl(href),
-            snippet: snippet,
-            source: 'duckduckgo',
-          ));
-        }
-      } catch (e) {
-        continue;
-      }
-    }
-
-    debugPrint('[Scraper] Parsed ${results.length} DuckDuckGo results');
+    debugPrint('[Scraper] Google: ${results.length} results');
     return results;
   }
 
   String _extractDuckUrl(String href) {
     final uddgMatch = RegExp(r'uddg=([^&]+)').firstMatch(href);
-    if (uddgMatch != null) {
-      return Uri.decodeComponent(uddgMatch.group(1) ?? href);
-    }
+    if (uddgMatch != null) return Uri.decodeComponent(uddgMatch.group(1) ?? href);
     if (href.startsWith('http')) return href;
     return 'https:$href';
   }
@@ -172,37 +126,34 @@ class ScraperService {
     try {
       final uri = Uri.parse(url);
       final response = await _client.get(uri, headers: {
-        'User-Agent': _userAgents[0],
+        'User-Agent': _userAgent,
       }).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final document = html_parser.parse(response.body);
-
         for (final tag in ['script', 'style', 'nav', 'footer', 'header']) {
           document.querySelectorAll(tag).forEach((e) => e.remove());
         }
-
         final mainContent = document.querySelector('main') ??
             document.querySelector('article') ??
             document.querySelector('.content') ??
             document.body;
-
         return mainContent?.text.trim() ?? '';
       }
     } catch (e) {
-      debugPrint('[Scraper] Fetch page error for $url: $e');
+      debugPrint('[Scraper] Fetch error for $url: $e');
     }
     return null;
   }
 
-  /// Multi-query search: run several related queries and merge results.
+  /// Multi-query search and deduplicate.
   Future<List<ScrapedSource>> multiSearch(List<String> queries,
       {int perQuery = 5}) async {
     final allResults = <ScrapedSource>[];
     final seenUrls = <String>{};
 
     for (final query in queries) {
-      final results = await searchGoogle(query, numResults: perQuery);
+      final results = await search(query, numResults: perQuery);
       for (final r in results) {
         final urlKey = r.url.replaceAll(RegExp(r'[/#?]'), '');
         if (!seenUrls.contains(urlKey)) {
@@ -210,121 +161,37 @@ class ScraperService {
           allResults.add(r);
         }
       }
-      await Future.delayed(const Duration(milliseconds: 800));
+      await Future.delayed(const Duration(milliseconds: 600));
     }
 
     return allResults;
   }
 
-  /// Generate simulated results when all scrapers fail.
+  /// Fallback simulated results — contextually generated.
   List<ScrapedSource> _generateSimulatedResults(String query) {
-    debugPrint('[Scraper] Generating simulated results for: $query');
-    final lower = query.toLowerCase();
-
-    if (lower.contains('macbook') || lower.contains('laptop')) {
-      return [
-        ScrapedSource(
-          title: 'MacBook Air M2 - Best Price Comparison 2024',
-          url: 'https://www.smartprix.com/laptops/macbook-air-m2',
-          snippet:
-              'MacBook Air M2 starting at INR 89,900. Compare prices across Amazon, Flipkart, Croma, and authorized resellers. M2 chip, 8GB RAM, 256GB SSD.',
-          source: 'simulated',
-          relevanceScore: 0.95,
-        ),
-        ScrapedSource(
-          title: 'MacBook Air M3 vs M2 - Which to Buy in 2024?',
-          url: 'https://www.gadgets360.com/laptops/macbook-comparison',
-          snippet:
-              'M3 Air starts at INR 1,14,900. M2 offers better value under 1 lakh. Performance difference is 15-20% for most tasks. Battery life similar.',
-          source: 'simulated',
-          relevanceScore: 0.92,
-        ),
-        ScrapedSource(
-          title: 'MacBook Deals on Amazon India - Latest Offers',
-          url: 'https://www.amazon.in/macbook-deals',
-          snippet:
-              'MacBook Air M2 at INR 87,990 with exchange offer. No-cost EMI available. Check seller ratings before purchase. Amazon Prime delivery.',
-          source: 'simulated',
-          relevanceScore: 0.88,
-        ),
-        ScrapedSource(
-          title: 'Flipkart Big Savings Days - MacBook Offers',
-          url: 'https://www.flipkart.com/macbook-offers',
-          snippet:
-              'MacBook Air M2 at INR 89,990. Additional INR 3,000 off with SBI card. Exchange bonus up to INR 15,000. Check warranty terms.',
-          source: 'simulated',
-          relevanceScore: 0.85,
-        ),
-        ScrapedSource(
-          title: 'Croma Retail - MacBook Air M2 In-Store Price',
-          url: 'https://www.croma.com/macbook-air-m2',
-          snippet:
-              'In-store price INR 91,990. Price match available. Extended warranty option. Visit store for hands-on before buying online.',
-          source: 'simulated',
-          relevanceScore: 0.80,
-        ),
-        ScrapedSource(
-          title: 'Reddit: Is MacBook Air M2 still worth it in 2024?',
-          url: 'https://www.reddit.com/r/macbook/m2-worth-it-2024',
-          snippet:
-              'Most users say yes for under 1L. M3 is better but not worth the price jump. Get 16GB RAM if possible. Base model is fine for most use cases.',
-          source: 'simulated',
-          relevanceScore: 0.75,
-        ),
-      ];
-    }
-
-    if (lower.contains('flat') || lower.contains('rent') || lower.contains('apartment')) {
-      return [
-        ScrapedSource(
-          title: '2BHK Flats for Rent - Near IT Park Area',
-          url: 'https://www.magicbricks.com/flats-rent-it-park',
-          snippet:
-              '2BHK flats from INR 22,000 to INR 35,000. Furnished and semi-furnished options available. Near metro station, gated community.',
-          source: 'simulated',
-          relevanceScore: 0.93,
-        ),
-        ScrapedSource(
-          title: 'NoBroker - Zero Brokerage Rentals',
-          url: 'https://www.nobroker.in/flats-rent',
-          snippet:
-              'Direct owner listings. No brokerage. 2BHK from INR 18,000. Verified listings with photos. Video tour available.',
-          source: 'simulated',
-          relevanceScore: 0.90,
-        ),
-        ScrapedSource(
-          title: 'Housing.com - Premium Flats Near Office Hub',
-          url: 'https://www.housing.com/rent-properties',
-          snippet:
-              'Premium 2BHK from INR 28,000. Swimming pool, gym, parking. 10min walk to office area. Resident reviews available.',
-          source: 'simulated',
-          relevanceScore: 0.85,
-        ),
-      ];
-    }
-
+    debugPrint('[Scraper] Using simulated results for: $query');
     return [
       ScrapedSource(
-        title: 'Top Results for: $query',
+        title: 'Top Results: $query',
         url: 'https://www.google.com/search?q=${Uri.encodeComponent(query)}',
         snippet:
-            'Comprehensive results and comparison for: $query. Multiple sources analyzed for best options.',
+            'Comprehensive comparison and analysis for: $query. Multiple sources reviewed for best options and deals.',
         source: 'simulated',
         relevanceScore: 0.90,
       ),
       ScrapedSource(
-        title: 'Comparison & Reviews: $query',
+        title: 'Reviews & Ratings: $query',
         url: 'https://www.trustpilot.com/search?query=${Uri.encodeComponent(query)}',
         snippet:
-            'Verified user reviews and ratings. Compare options side by side. Expert recommendations included.',
+            'Verified user reviews and ratings. Compare options side by side with expert and user recommendations.',
         source: 'simulated',
         relevanceScore: 0.85,
       ),
       ScrapedSource(
-        title: 'Best Deals & Offers: $query',
+        title: 'Best Deals: $query',
         url: 'https://www.pricecomparison.com/search?q=${Uri.encodeComponent(query)}',
         snippet:
-            'Price comparison across platforms. Find the best deal. Historical price tracking available.',
+            'Price comparison across platforms. Historical price tracking and deal alerts available.',
         source: 'simulated',
         relevanceScore: 0.80,
       ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../models/models.dart';
 import '../providers/app_state.dart';
+import 'browser_screen.dart';
 
 class WorkspaceScreen extends StatelessWidget {
   final Workspace workspace;
@@ -32,7 +33,9 @@ class WorkspaceScreen extends StatelessWidget {
             if (workspace.realityChecks.isNotEmpty)
               SliverToBoxAdapter(child: _buildRealitySection()),
             if (workspace.decision != null)
-              SliverToBoxAdapter(child: _buildDecisionSection(brain)),
+              SliverToBoxAdapter(child: _buildDecisionSection()),
+            if (workspace.pendingActions.isNotEmpty)
+              SliverToBoxAdapter(child: _buildPendingActions()),
             SliverToBoxAdapter(child: _buildActionLog()),
             if (workspace.status == WorkspaceStatus.awaitingApproval)
               SliverToBoxAdapter(child: _buildActionButtons(context, brain)),
@@ -69,38 +72,17 @@ class WorkspaceScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            workspace.objective,
-            style: WorldOSTheme.heading1.copyWith(fontSize: 22),
-          ),
+          Text(workspace.objective,
+              style: WorldOSTheme.heading1.copyWith(fontSize: 22)),
           const SizedBox(height: 4),
           Text(workspace.rawIntention, style: WorldOSTheme.bodySmall),
-          const SizedBox(height: 4),
-          Text(
-            '${workspace.createdAt.day}/${workspace.createdAt.month}/${workspace.createdAt.year} ${workspace.createdAt.hour}:${workspace.createdAt.minute.toString().padLeft(2, '0')}',
-            style: WorldOSTheme.caption,
-          ),
         ],
       ),
     );
   }
 
   Widget _buildStatusBadge() {
-    Color color;
-    switch (workspace.status) {
-      case WorkspaceStatus.completed:
-        color = WorldOSTheme.green;
-        break;
-      case WorkspaceStatus.failed:
-        color = WorldOSTheme.red;
-        break;
-      case WorkspaceStatus.awaitingApproval:
-        color = WorldOSTheme.amber;
-        break;
-      default:
-        color = WorldOSTheme.cyan;
-    }
-
+    final color = _statusColor(workspace.status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
@@ -117,10 +99,7 @@ class WorkspaceScreen extends StatelessWidget {
               width: 6,
               height: 6,
               margin: const EdgeInsets.only(right: 6),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color,
-              ),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color),
             )
                 .animate(onPlay: (c) => c.repeat())
                 .fadeIn(duration: 600.ms)
@@ -133,6 +112,19 @@ class WorkspaceScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Color _statusColor(WorkspaceStatus status) {
+    switch (status) {
+      case WorkspaceStatus.completed:
+        return WorldOSTheme.green;
+      case WorkspaceStatus.failed:
+        return WorldOSTheme.red;
+      case WorkspaceStatus.awaitingApproval:
+        return WorldOSTheme.amber;
+      default:
+        return WorldOSTheme.cyan;
+    }
   }
 
   Widget _buildStatusSection() {
@@ -158,16 +150,12 @@ class WorkspaceScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${(workspace.progress * 100).toInt()}% complete',
-                style: WorldOSTheme.caption,
-              ),
+              Text('${(workspace.progress * 100).toInt()}% complete',
+                  style: WorldOSTheme.caption),
               if (workspace.minutesSaved > 0)
-                Text(
-                  '${workspace.minutesSaved}min saved',
-                  style: WorldOSTheme.caption
-                      .copyWith(color: WorldOSTheme.green),
-                ),
+                Text('${workspace.minutesSaved}min saved',
+                    style:
+                        WorldOSTheme.caption.copyWith(color: WorldOSTheme.green)),
             ],
           ),
         ],
@@ -186,8 +174,7 @@ class WorkspaceScreen extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children:
-                workspace.agents.map((agent) => _buildAgentChip(agent)).toList(),
+            children: workspace.agents.map(_buildAgentChip).toList(),
           ),
         ],
       ),
@@ -228,10 +215,8 @@ class WorkspaceScreen extends StatelessWidget {
         children: [
           Icon(agent.type.icon, size: 14, color: color),
           const SizedBox(width: 6),
-          Text(
-            agent.type.label,
-            style: WorldOSTheme.bodySmall.copyWith(color: color),
-          ),
+          Text(agent.type.label,
+              style: WorldOSTheme.bodySmall.copyWith(color: color)),
           const SizedBox(width: 4),
           if (agent.status == AgentStatus.running)
             Icon(statusIcon, size: 12, color: color)
@@ -311,14 +296,6 @@ class WorkspaceScreen extends StatelessWidget {
               ),
             );
           }),
-          if (workspace.sources.length > 5)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                '+ ${workspace.sources.length - 5} more sources',
-                style: WorldOSTheme.caption.copyWith(color: WorldOSTheme.cyan),
-              ),
-            ),
         ],
       ),
     );
@@ -334,13 +311,11 @@ class WorkspaceScreen extends StatelessWidget {
             children: [
               const Icon(Icons.fact_check, color: WorldOSTheme.amber, size: 16),
               const SizedBox(width: 8),
-              Text(
-                'REALITY CHECK',
-                style: WorldOSTheme.caption.copyWith(
-                  color: WorldOSTheme.amber,
-                  letterSpacing: 2,
-                ),
-              ),
+              Text('REALITY CHECK',
+                  style: WorldOSTheme.caption.copyWith(
+                    color: WorldOSTheme.amber,
+                    letterSpacing: 2,
+                  )),
             ],
           ),
           const SizedBox(height: 12),
@@ -380,19 +355,15 @@ class WorkspaceScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Claim: ${check.claim}',
-                            style: WorldOSTheme.bodySmall.copyWith(
-                              color: WorldOSTheme.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          Text('Claim: ${check.claim}',
+                              style: WorldOSTheme.bodySmall.copyWith(
+                                color: WorldOSTheme.textPrimary,
+                                fontWeight: FontWeight.w600,
+                              )),
                           const SizedBox(height: 2),
-                          Text(
-                            'Reality: ${check.reality}',
-                            style:
-                                WorldOSTheme.bodySmall.copyWith(color: color),
-                          ),
+                          Text('Reality: ${check.reality}',
+                              style:
+                                  WorldOSTheme.bodySmall.copyWith(color: color)),
                         ],
                       ),
                     ),
@@ -406,9 +377,8 @@ class WorkspaceScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDecisionSection(AppBrain brain) {
+  Widget _buildDecisionSection() {
     final d = workspace.decision!;
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
       child: Container(
@@ -421,37 +391,22 @@ class WorkspaceScreen extends StatelessWidget {
               children: [
                 const Icon(Icons.gavel, color: WorldOSTheme.green, size: 18),
                 const SizedBox(width: 8),
-                Text(
-                  'VERDICT',
-                  style: WorldOSTheme.caption.copyWith(
-                    color: WorldOSTheme.green,
-                    letterSpacing: 3,
-                  ),
-                ),
+                Text('VERDICT',
+                    style: WorldOSTheme.caption.copyWith(
+                      color: WorldOSTheme.green,
+                      letterSpacing: 3,
+                    )),
               ],
             ),
             const SizedBox(height: 16),
-            Text(
-              d.verdict,
-              style: WorldOSTheme.heading2.copyWith(color: WorldOSTheme.green),
-            ),
+            Text(d.verdict,
+                style:
+                    WorldOSTheme.heading2.copyWith(color: WorldOSTheme.green)),
             if (d.reasons.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text('REASONS', style: WorldOSTheme.caption),
               const SizedBox(height: 6),
-              ...d.reasons.map((r) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('-> ',
-                            style: WorldOSTheme.mono
-                                .copyWith(color: WorldOSTheme.green)),
-                        Expanded(
-                            child: Text(r, style: WorldOSTheme.bodySmall)),
-                      ],
-                    ),
-                  )),
+              ...d.reasons.map((r) => _bullet('-> ', r, WorldOSTheme.green)),
             ],
             if (d.risks.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -459,19 +414,7 @@ class WorkspaceScreen extends StatelessWidget {
                   style:
                       WorldOSTheme.caption.copyWith(color: WorldOSTheme.amber)),
               const SizedBox(height: 6),
-              ...d.risks.map((r) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('! ',
-                            style: WorldOSTheme.bodySmall
-                                .copyWith(color: WorldOSTheme.amber)),
-                        Expanded(
-                            child: Text(r, style: WorldOSTheme.bodySmall)),
-                      ],
-                    ),
-                  )),
+              ...d.risks.map((r) => _bullet('! ', r, WorldOSTheme.amber)),
             ],
             if (d.avoid.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -479,28 +422,18 @@ class WorkspaceScreen extends StatelessWidget {
                   style:
                       WorldOSTheme.caption.copyWith(color: WorldOSTheme.red)),
               const SizedBox(height: 6),
-              ...d.avoid.map((r) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('x ',
-                            style: WorldOSTheme.bodySmall
-                                .copyWith(color: WorldOSTheme.red)),
-                        Expanded(
-                            child: Text(r, style: WorldOSTheme.bodySmall)),
-                      ],
-                    ),
-                  )),
+              ...d.avoid.map((r) => _bullet('x ', r, WorldOSTheme.red)),
             ],
-            if (d.recommendedAction != null) ...[
+            if (d.recommendedAction != null &&
+                d.recommendedAction!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: WorldOSTheme.green.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: WorldOSTheme.green.withOpacity(0.2)),
+                  border:
+                      Border.all(color: WorldOSTheme.green.withOpacity(0.2)),
                 ),
                 child: Row(
                   children: [
@@ -508,13 +441,11 @@ class WorkspaceScreen extends StatelessWidget {
                         color: WorldOSTheme.green, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(
-                        d.recommendedAction!,
-                        style: WorldOSTheme.bodySmall.copyWith(
-                          color: WorldOSTheme.green,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text(d.recommendedAction!,
+                          style: WorldOSTheme.bodySmall.copyWith(
+                            color: WorldOSTheme.green,
+                            fontWeight: FontWeight.w600,
+                          )),
                     ),
                   ],
                 ),
@@ -523,6 +454,66 @@ class WorkspaceScreen extends StatelessWidget {
           ],
         ),
       ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.1, end: 0),
+    );
+  }
+
+  Widget _bullet(String marker, String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(marker, style: WorldOSTheme.bodySmall.copyWith(color: color)),
+          Expanded(child: Text(text, style: WorldOSTheme.bodySmall)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingActions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('PROPOSED ACTIONS', style: WorldOSTheme.caption),
+          const SizedBox(height: 12),
+          ...workspace.pendingActions.map((a) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: WorldOSTheme.cardDecoration,
+                child: Row(
+                  children: [
+                    Icon(
+                      a.executed ? Icons.check_circle : Icons.radio_button_unchecked,
+                      size: 16,
+                      color: a.executed
+                          ? WorldOSTheme.green
+                          : WorldOSTheme.textMuted,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a.description,
+                              style: WorldOSTheme.bodySmall.copyWith(
+                                color: WorldOSTheme.textPrimary,
+                              )),
+                          Text(a.type.name,
+                              style: WorldOSTheme.mono.copyWith(fontSize: 8)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -573,45 +564,84 @@ class WorkspaceScreen extends StatelessWidget {
     );
   }
 
+  String? get _firstOpenUrl {
+    for (final a in workspace.pendingActions) {
+      if (a.type == ExecActionType.openUrl) {
+        final url = a.params['url'];
+        if (url != null && url.isNotEmpty) return url;
+      }
+    }
+    if (workspace.sources.isNotEmpty) return workspace.sources.first.url;
+    return null;
+  }
+
   Widget _buildActionButtons(BuildContext context, AppBrain brain) {
+    final openUrl = _firstOpenUrl;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.check_circle_outline),
-              label: const Text('Approve & Execute'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: WorldOSTheme.green,
-                foregroundColor: WorldOSTheme.bg,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: const Text('Approve'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: WorldOSTheme.green,
+                    foregroundColor: WorldOSTheme.bg,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () {
+                    HapticFeedback.mediumImpact();
+                    brain.approveDecision();
+                  },
                 ),
               ),
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                brain.approveDecision();
-              },
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.handshake_outlined),
-              label: const Text('Negotiate'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: WorldOSTheme.amber,
-                side: const BorderSide(color: WorldOSTheme.amber),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.handshake_outlined),
+                  label: const Text('Negotiate'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: WorldOSTheme.amber,
+                    side: const BorderSide(color: WorldOSTheme.amber),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => _negotiate(context, brain),
                 ),
               ),
-              onPressed: () => _negotiate(context, brain),
-            ),
+            ],
           ),
+          if (openUrl != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.public),
+                label: const Text('Open in Action Browser'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WorldOSTheme.cyan,
+                  foregroundColor: WorldOSTheme.bg,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BrowserScreen(initialUrl: openUrl),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -650,8 +680,8 @@ class WorkspaceScreen extends StatelessWidget {
                     color: WorldOSTheme.amber, size: 18),
                 const SizedBox(width: 8),
                 Text('NEGOTIATION DRAFT',
-                    style: WorldOSTheme.caption
-                        .copyWith(color: WorldOSTheme.amber, letterSpacing: 2)),
+                    style: WorldOSTheme.caption.copyWith(
+                        color: WorldOSTheme.amber, letterSpacing: 2)),
               ],
             ),
             const SizedBox(height: 16),

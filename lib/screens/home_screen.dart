@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../providers/app_state.dart';
 import '../widgets/widgets.dart';
+import 'browser_screen.dart';
 import 'workspace_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -45,6 +46,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _intentionController.clear();
   }
 
+  void _openBrowser() {
+    HapticFeedback.lightImpact();
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BrowserScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final brain = context.watch<AppBrain>();
@@ -58,6 +66,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: WorldOSTheme.bg,
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: WorldOSTheme.cyan,
+        foregroundColor: WorldOSTheme.bg,
+        icon: const Icon(Icons.public),
+        label: const Text('Browser'),
+        onPressed: _openBrowser,
+      ),
       body: SafeArea(
         child: CustomScrollView(
           controller: _scrollController,
@@ -107,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+            const SliverToBoxAdapter(child: SizedBox(height: 96)),
           ],
         ),
       ),
@@ -115,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildTopBar(AppBrain brain) {
+    final loaded = brain.llama.isModelLoaded;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       child: Row(
@@ -139,14 +155,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: brain.isModelReady
-                  ? WorldOSTheme.green.withOpacity(0.1)
-                  : WorldOSTheme.amber.withOpacity(0.1),
+              color: (loaded ? WorldOSTheme.green : WorldOSTheme.amber)
+                  .withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: brain.isModelReady
-                    ? WorldOSTheme.green.withOpacity(0.3)
-                    : WorldOSTheme.amber.withOpacity(0.3),
+                color: (loaded ? WorldOSTheme.green : WorldOSTheme.amber)
+                    .withOpacity(0.3),
               ),
             ),
             child: Row(
@@ -157,14 +171,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   height: 6,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: brain.isModelReady
-                        ? WorldOSTheme.green
-                        : WorldOSTheme.amber,
+                    color: loaded ? WorldOSTheme.green : WorldOSTheme.amber,
                   ),
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  brain.isModelReady ? 'LFM2-1.2B Active' : 'Simulated',
+                  brain.llama.statusLabel,
                   style: WorldOSTheme.mono.copyWith(fontSize: 9),
                 ),
               ],
@@ -231,8 +243,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 valueColor: AlwaysStoppedAnimation<Color>(
-                                  WorldOSTheme.cyan,
-                                ),
+                                    WorldOSTheme.cyan),
                               ),
                             )
                           : Icon(
@@ -262,21 +273,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
                       borderSide: const BorderSide(
-                        color: WorldOSTheme.border,
-                        width: 1.5,
-                      ),
+                          color: WorldOSTheme.border, width: 1.5),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20),
-                      borderSide: const BorderSide(
-                        color: WorldOSTheme.cyan,
-                        width: 2,
-                      ),
+                      borderSide:
+                          const BorderSide(color: WorldOSTheme.cyan, width: 2),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 18,
-                    ),
+                        horizontal: 20, vertical: 18),
                   ),
                 ),
               );
@@ -302,9 +307,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       QuickAction(
           icon: Icons.track_changes, label: 'Track', color: WorldOSTheme.cyan),
       QuickAction(
-          icon: Icons.summarize,
-          label: 'Summarize',
-          color: WorldOSTheme.amber),
+          icon: Icons.summarize, label: 'Summarize', color: WorldOSTheme.amber),
       QuickAction(icon: Icons.gavel, label: 'Decide', color: WorldOSTheme.green),
     ];
 
@@ -374,12 +377,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               children: [
                 _buildTimeStat('${ts.tasksCompleted}', 'Tasks'),
-                const SizedBox(width: 24),
+                const SizedBox(width: 20),
+                _buildTimeStat('${ts.pagesRead}', 'Pages'),
+                const SizedBox(width: 20),
                 _buildTimeStat('${ts.comparisonsDone}', 'Compared'),
-                const SizedBox(width: 24),
+                const SizedBox(width: 20),
                 _buildTimeStat('${ts.formsFilled}', 'Forms'),
-                const SizedBox(width: 24),
-                _buildTimeStat('${ts.badChoicesAvoided}', 'Avoided'),
               ],
             ),
           ],
@@ -413,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
           const SizedBox(height: 8),
           Text(
-            'Type your intention above and watch the\nbrowser become your workforce.',
+            'State an intention above, or open the Browser to\nread and act on any live web page.',
             textAlign: TextAlign.center,
             style: WorldOSTheme.body,
           ),
@@ -426,7 +429,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               _exampleChip('Buy best MacBook under 1 lakh'),
               _exampleChip('Find flat in Pune under 35k near office'),
               _exampleChip('Compare health insurance for family'),
-              _exampleChip('Cancel my unused subscriptions'),
               _exampleChip('Apply to 15 frontend developer jobs'),
             ],
           ),

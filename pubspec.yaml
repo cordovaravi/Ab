@@ -1,7 +1,7 @@
 name: worldos_browser
-description: WorldOS — The Action Browser. Intent to Outcome.
+description: WorldOS Browser V1 — Intent Workspace + Real Action Browser
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -10,10 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # LLM inference — https://llamadart.leehack.com/  (LFM2-1.2B Q4 GGUF, on-device)
+  # LLM inference — https://llamadart.leehack.com/
   llama_cpp_dart: ^0.0.9
 
-  # Networking & scraping (background "google scraper" brain)
+  # Networking
   http: ^1.2.1
   html: ^0.15.4
   dio: ^5.4.0
@@ -26,13 +26,11 @@ dependencies:
   # UI
   flutter_animate: ^4.3.0
   google_fonts: ^6.1.0
-  flutter_markdown: ^0.7.3
   shimmer: ^3.0.0
   uuid: ^4.2.2
   intl: ^0.19.0
   url_launcher: ^6.2.2
   webview_flutter: ^4.4.2
-  flutter_svg: ^2.0.9
 
 dev_dependencies:
   flutter_test:

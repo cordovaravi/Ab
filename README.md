@@ -1,133 +1,71 @@
-# WorldOS Browser — The Action Browser
+# WorldOS Browser — The Action Browser (V1)
 
 > The browser doesn't ask *"What do you want to search?"* — it asks **"What do you want to get done?"**
 
-WorldOS is a Flutter app that reframes the browser as a **digital workforce layer**: you state an
-*intention*, and a team of micro-agents searches the web, analyzes sources, runs reality checks,
-makes a decision, and presents it for your approval — turning websites into **outcomes**.
+WorldOS reframes the browser as a **digital workforce layer**. V1 has two halves that share one brain:
 
-It runs **on-device** using LiquidAI's **LFM2-1.2B** (Q4 GGUF) as the agent brain via
-[llamadart](https://llamadart.leehack.com/), with a background "google scraper" brain for sourcing.
+1. **Intent Workspace** — state a goal; a micro-agent orchestrator searches the web, analyzes
+   sources, runs reality checks, decides, and proposes actions for your approval.
+2. **Action Browser** — a real WebView that **reads** each page it loads (injected JS extracts text,
+   links, buttons, inputs, forms), **suggests** actions, and **executes** them: fill forms from your
+   profile, click elements, extract links — all on the live page.
 
----
-
-## What's here (MVP)
-
-- **Intention bar** instead of an address bar — type a goal, not a URL.
-- **Workspaces, not tabs** — each objective becomes a mission with status, sources, and a verdict.
-- **Micro-agent orchestrator** — Search / Price / Review / Fraud / Compare / Decision agents
-  coordinated by `Orchestrator` (`lib/services/orchestrator.dart`).
-- **Background scraper brain** — `ScraperService` scrapes Google → falls back to DuckDuckGo →
-  falls back to high-quality simulated results, so the pipeline always produces something to reason over.
-- **Reality Check layer** — flags marketing claims ("best price", "limited time", inflated ratings).
-- **Decision engine** — produces Verdict / Reasons / Risks / Avoid / Next action, not blue links.
-- **Human-time-saved dashboard** — the metric that matters: minutes recovered, tasks, comparisons.
-- **Approval gate + Negotiation drafting** — nothing final happens without you; draft a negotiation
-  message in one tap.
-- **Persistent memory** — user profile ("personal twin"), past intentions, website behavior,
-  time-saved stats via `MemoryService` (`shared_preferences`).
+On-device LLM via [llamadart](https://llamadart.leehack.com/) (LiquidAI **LFM2-1.2B** Q4 GGUF).
 
 ## Architecture
 
 ```
-User intention
-      │
-      ▼
-  AppBrain (Provider, lib/providers/app_state.dart)
-      │  orchestrator.processIntention(text)  → Stream<OrchestratorEvent>
-      ├──────────────┬───────────────┐
-      ▼              ▼               ▼
- LlamaService    ScraperService   MemoryService
- (LFM2-1.2B Q4)  (Google/DDG)     (profile, stats)
-      │
-      ▼
-  Orchestrator: parse → search → analyze → compare → decide → reality-check → time-saved
-      │
-      ▼
-  Workspace UI (screens/workspace_screen.dart): agents, sources, verdict, [Approve] [Negotiate]
+lib/
+  main.dart                       splash + app root
+  core/theme.dart
+  models/models.dart              Workspace, AgentTask, Decision, ExecAction, PageStructure, ...
+  services/
+    llama_service.dart            on-device LLM (honest "Simulation Mode" / "LFM2-1.2B Local")
+    scraper_service.dart          DuckDuckGo → Google → simulated fallback
+    webview_agent_service.dart    the browser's "eyes": JS injection + page parser  (SINGLE source)
+    action_executor.dart          fill/click/submit/email/export — audited, approval-gated
+    workflow_recorder.dart        record → replay multi-page workflows
+    orchestrator.dart             intent pipeline + analyzePage() for browser mode
+    memory_service.dart           profile (personal twin) + time-saved stats
+  providers/app_state.dart        AppBrain (provider) — wires it all together
+  screens/
+    home_screen.dart              intention bar, time-saved dashboard, Browser entry (FAB)
+    browser_screen.dart           the real Action Browser (WebView + page info + action panel)
+    workspace_screen.dart         agents, sources, reality checks, verdict, proposed actions
+  widgets/widgets.dart
 ```
 
-| Layer | File |
-|---|---|
-| Entry / splash | `lib/main.dart` |
-| Theme | `lib/core/theme.dart` |
-| Domain models | `lib/models/models.dart` |
-| On-device LLM | `lib/services/llama_service.dart` |
-| Scraper brain | `lib/services/scraper_service.dart` |
-| Orchestrator | `lib/services/orchestrator.dart` |
-| Memory | `lib/services/memory_service.dart` |
-| App state | `lib/providers/app_state.dart` |
-| Screens | `lib/screens/home_screen.dart`, `workspace_screen.dart` |
-| Widgets | `lib/widgets/widgets.dart` |
+**Flow:** Intent → `Orchestrator.processIntention` → search/analyze/decide → **Workspace** with a
+verdict + proposed actions → *Open in Action Browser* hands the recommended URL to `BrowserScreen`,
+which reads the page and lets you execute real actions (approval-gated).
 
-## Status — read this
+## Honest status
 
-The app runs **end-to-end immediately** in *simulated mode*: `LlamaService` returns intelligent,
-context-aware structured responses parsed from the prompt, and `ScraperService` returns curated
-fallback results when live scraping is blocked. Every feature (agents, decision, reality checks,
-negotiation, dashboard) works on first launch.
-
-**Two pieces to wire for full "real" operation** (clearly marked in code):
-1. **Real on-device inference** — in `LlamaService._loadModel` / `generate`, replace the simulation
-   with the actual engine call. The model URL/filename (`LFM2-1.2B-Q4_0.gguf`) and the
-   download-with-progress flow are already in place. Note: `pubspec.yaml` lists `llama_cpp_dart`;
-   you can also use the [`llamadart`](https://pub.dev/packages/llamadart) package
-   (`LlamaEngine`/`ChatSession`) — both target llama.cpp GGUF.
-2. **Live scraping reliability** — Google often blocks server-side scraping; the DuckDuckGo HTML
-   fallback is more permissive. For robustness, a future version can scrape inside a `WebView`
-   (rendered DOM) instead of raw HTTP.
+- **On-device inference is stubbed.** `LlamaService` runs in **Simulation Mode** — context-aware,
+  genuinely-parsed structured output (it reads your intention/page text), labeled honestly in the UI.
+  To go live, uncomment the `llama_cpp_dart` calls in `LlamaService._loadModel` / `generate` (the
+  download-with-progress flow and model path are already wired).
+- **The browser is real.** WebView navigation, JS page extraction, form-fill and button-click
+  execution all run for real against live pages. Search scraping is real (DuckDuckGo HTML), with a
+  Google attempt and a simulated fallback when blocked.
+- **State-changing actions are approval-gated** and written to an audit log.
 
 ## Setup & Run
 
-This repo contains the Dart sources, `pubspec.yaml`, and config. Generate the native platform
-folders once, then run:
-
 ```bash
-# From the repo root — generates android/ (and other platforms) WITHOUT overwriting lib/ or pubspec.
+# From the repo root — generates the rest of android/ without overwriting lib/, pubspec, or the manifest.
 flutter create . --project-name worldos_browser --platforms=android
-
 flutter pub get
-flutter run            # Android device/emulator recommended for on-device LLM
+flutter run            # Android device/emulator recommended
 ```
 
-Desktop also works: `flutter create . --platforms=linux,macos,windows` then `flutter run -d <device>`.
+`android/app/src/main/AndroidManifest.xml` is included (INTERNET permission + `largeHeap` for the
+on-device model). For `build.gradle`, set `minSdkVersion 24` and add
+`ndk { abiFilters 'arm64-v8a','armeabi-v7a','x86_64' }`.
 
-### Android configuration
+## Verify
 
-After `flutter create .`, apply these edits:
-
-**`android/app/src/main/AndroidManifest.xml`** — permissions above `<application>`, and flags on it:
-
-```xml
-<uses-permission android:name="android.permission.INTERNET"/>
-<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-
-<application
-    android:label="WorldOS Browser"
-    android:largeHeap="true"
-    android:usesCleartextTraffic="true"
-    ... >
-```
-
-`largeHeap` matters: the Q4 1.2B model plus context needs room — target mid/high-end devices.
-
-**`android/app/build.gradle`** (or `build.gradle.kts`):
-
-```gradle
-android {
-    defaultConfig {
-        minSdkVersion 24
-        targetSdkVersion 34
-        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
-    }
-}
-```
-
-## Roadmap (from the manifesto)
-
-Universal form brain · workflow record/replay · time-travel page diffs · website memory selectors ·
-business-portal automation (login → download report → extract tables → fill forms → export Excel/email).
-
----
-
-*Built around one metric: how many human minutes did this remove?*
+`flutter run` → splash → home. Tap **Browser**, load a real site, hit the **eye** to read the page
+(counts of links/buttons/inputs/forms appear), expand the strip, type an intention, and try
+**Fill Forms** / **Extract Links** / **Interact**. Or type an intention on home → open the resulting
+workspace → **Open in Action Browser**. `flutter test` runs the model unit tests.

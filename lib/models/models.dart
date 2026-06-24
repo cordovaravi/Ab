@@ -12,6 +12,7 @@ enum WorkspaceStatus {
   comparing,
   deciding,
   awaitingApproval,
+  executing,
   completed,
   failed,
 }
@@ -26,6 +27,7 @@ class Workspace {
   List<RealityCheck> realityChecks;
   Decision? decision;
   List<ActionStep> actionLog;
+  List<ExecAction> pendingActions;
   DateTime createdAt;
   int minutesSaved;
 
@@ -38,12 +40,14 @@ class Workspace {
     List<RealityCheck>? realityChecks,
     this.decision,
     List<ActionStep>? actionLog,
+    List<ExecAction>? pendingActions,
     int? minutesSaved,
   })  : id = _uuid.v4(),
         agents = agents ?? [],
         sources = sources ?? [],
         realityChecks = realityChecks ?? [],
         actionLog = actionLog ?? [],
+        pendingActions = pendingActions ?? [],
         createdAt = DateTime.now(),
         minutesSaved = minutesSaved ?? 0;
 
@@ -61,6 +65,8 @@ class Workspace {
         return 'Deciding';
       case WorkspaceStatus.awaitingApproval:
         return 'Awaiting Approval';
+      case WorkspaceStatus.executing:
+        return 'Executing';
       case WorkspaceStatus.completed:
         return 'Completed';
       case WorkspaceStatus.failed:
@@ -81,7 +87,9 @@ class Workspace {
       case WorkspaceStatus.deciding:
         return 0.8;
       case WorkspaceStatus.awaitingApproval:
-        return 0.9;
+        return 0.85;
+      case WorkspaceStatus.executing:
+        return 0.92;
       case WorkspaceStatus.completed:
         return 1.0;
       case WorkspaceStatus.failed:
@@ -102,7 +110,8 @@ enum AgentType {
   decision('Decision Agent', Icons.gavel, 'Makes final recommendations'),
   memory('Memory Agent', Icons.psychology, 'Recalls user preferences and history'),
   legal('Legal Agent', Icons.balance, 'Checks legal and policy terms'),
-  execute('Execute Agent', Icons.play_arrow, 'Carries out the final action');
+  execute('Execute Agent', Icons.play_arrow, 'Carries out the final action'),
+  page('Page Agent', Icons.web, 'Reads and understands web pages');
 
   final String label;
   final IconData icon;
@@ -126,12 +135,6 @@ class AgentTask {
     this.startedAt,
     this.completedAt,
   });
-
-  Duration? get duration {
-    if (startedAt == null) return null;
-    final end = completedAt ?? DateTime.now();
-    return end.difference(startedAt!);
-  }
 }
 
 // ── Scraped Source ─────────────────────────────────────
@@ -178,7 +181,6 @@ class Decision {
   final List<String> risks;
   final List<String> avoid;
   final String? recommendedAction;
-  final List<CompareOption> options;
 
   Decision({
     required this.verdict,
@@ -186,21 +188,37 @@ class Decision {
     this.risks = const [],
     this.avoid = const [],
     this.recommendedAction,
-    this.options = const [],
   });
 }
 
-class CompareOption {
-  final String name;
-  final Map<String, String> attributes;
-  final double score;
-  final bool recommended;
+// ── Executable Actions ─────────────────────────────────
 
-  CompareOption({
-    required this.name,
-    this.attributes = const {},
-    this.score = 0,
-    this.recommended = false,
+enum ExecActionType {
+  openUrl,
+  clickElement,
+  fillField,
+  submitForm,
+  downloadFile,
+  copyText,
+  sendEmail,
+  exportData,
+  navigateBack,
+  waitForPage,
+}
+
+class ExecAction {
+  final ExecActionType type;
+  final String description;
+  final Map<String, String> params;
+  bool executed;
+  String? result;
+
+  ExecAction({
+    required this.type,
+    required this.description,
+    this.params = const {},
+    this.executed = false,
+    this.result,
   });
 }
 
@@ -217,10 +235,114 @@ class ActionStep {
   }) : timestamp = DateTime.now();
 }
 
+// ── Page Structure (from JS injection) ─────────────────
+
+class PageStructure {
+  final String title;
+  final String url;
+  final String text;
+  final List<PageLink> links;
+  final List<PageButton> buttons;
+  final List<PageInput> inputs;
+  final List<PageForm> forms;
+  final List<PageImage> images;
+
+  PageStructure({
+    required this.title,
+    required this.url,
+    required this.text,
+    this.links = const [],
+    this.buttons = const [],
+    this.inputs = const [],
+    this.forms = const [],
+    this.images = const [],
+  });
+
+  factory PageStructure.empty() => PageStructure(
+        title: '',
+        url: '',
+        text: '',
+      );
+}
+
+class PageLink {
+  final String text;
+  final String href;
+  PageLink({required this.text, required this.href});
+}
+
+class PageButton {
+  final String text;
+  final String? id;
+  final String? className;
+  PageButton({required this.text, this.id, this.className});
+}
+
+class PageInput {
+  final String name;
+  final String type;
+  final String placeholder;
+  final String? value;
+  final String? label;
+  PageInput({
+    required this.name,
+    required this.type,
+    this.placeholder = '',
+    this.value,
+    this.label,
+  });
+}
+
+class PageForm {
+  final String action;
+  final String method;
+  final List<PageInput> fields;
+  PageForm({required this.action, required this.method, this.fields = const []});
+}
+
+class PageImage {
+  final String src;
+  final String alt;
+  PageImage({required this.src, required this.alt});
+}
+
+// ── Workflow ───────────────────────────────────────────
+
+class WorkflowStep {
+  final String url;
+  final String action;
+  final Map<String, String> params;
+  final DateTime timestamp;
+
+  WorkflowStep({
+    required this.url,
+    required this.action,
+    this.params = const {},
+  }) : timestamp = DateTime.now();
+}
+
+class Workflow {
+  final String id;
+  String name;
+  String description;
+  List<WorkflowStep> steps;
+  DateTime createdAt;
+
+  Workflow({
+    required this.name,
+    this.description = '',
+    List<WorkflowStep>? steps,
+  })  : id = _uuid.v4(),
+        steps = steps ?? [],
+        createdAt = DateTime.now();
+}
+
 // ── User Profile (Personal Twin) ───────────────────────
 
 class UserProfile {
   String name;
+  String email;
+  String phone;
   String budget;
   String location;
   String preferences;
@@ -231,6 +353,8 @@ class UserProfile {
 
   UserProfile({
     this.name = '',
+    this.email = '',
+    this.phone = '',
     this.budget = '',
     this.location = '',
     this.preferences = '',
@@ -250,6 +374,7 @@ class TimeSaved {
   int formsFilled;
   int comparisonsDone;
   int badChoicesAvoided;
+  int pagesRead;
 
   TimeSaved({
     this.totalMinutes = 0,
@@ -257,6 +382,7 @@ class TimeSaved {
     this.formsFilled = 0,
     this.comparisonsDone = 0,
     this.badChoicesAvoided = 0,
+    this.pagesRead = 0,
   });
 
   String get formatted {
@@ -270,4 +396,5 @@ class TimeSaved {
   void incrementForms() => formsFilled++;
   void incrementComparisons() => comparisonsDone++;
   void incrementBadChoices() => badChoicesAvoided++;
+  void incrementPages() => pagesRead++;
 }

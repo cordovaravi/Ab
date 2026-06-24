@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class WorldOSTheme {
-  // ── Palette ──────────────────────────────────────────
   static const bg = Color(0xFF06060E);
   static const surface = Color(0xFF0D0D1A);
   static const card = Color(0xFF141428);
@@ -19,7 +18,6 @@ class WorldOSTheme {
   static const textSecondary = Color(0xFF9A9AB0);
   static const textMuted = Color(0xFF6B6B80);
 
-  // ── Typography ───────────────────────────────────────
   static TextStyle get heading1 => GoogleFonts.spaceGrotesk(
         fontSize: 28,
         fontWeight: FontWeight.w700,
@@ -62,7 +60,6 @@ class WorldOSTheme {
         color: cyan,
       );
 
-  // ── Decorations ──────────────────────────────────────
   static BoxDecoration get cardDecoration => BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(16),
@@ -70,6 +67,7 @@ class WorldOSTheme {
       );
 
   static BoxDecoration glowDecoration(Color color) => BoxDecoration(
+        color: card,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: color.withOpacity(0.3), width: 1),
         boxShadow: [
@@ -87,7 +85,6 @@ class WorldOSTheme {
         border: Border.all(color: border, width: 1.5),
       );
 
-  // ── Theme Data ───────────────────────────────────────
   static ThemeData get darkTheme => ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: bg,
@@ -107,15 +104,6 @@ class WorldOSTheme {
         dividerTheme: const DividerThemeData(
           color: border,
           thickness: 1,
-        ),
-        chipTheme: ChipThemeData(
-          backgroundColor: surface,
-          selectedColor: cyan.withOpacity(0.15),
-          labelStyle: bodySmall,
-          side: const BorderSide(color: border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
         ),
         cardTheme: CardThemeData(
           color: card,
